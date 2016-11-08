@@ -30,6 +30,8 @@ public class AddressBookServiceTest {
 
 	private HttpServer server;
 
+    private final Client CLIENT = ClientBuilder.newClient();
+
     @Test
     public void serviceIsAlive() throws IOException {
         // Prepare server
@@ -37,10 +39,8 @@ public class AddressBookServiceTest {
         int initialAddressBookSize = ab.getPersonList().size();
         launchServer(ab);
 
-        final Client CLIENT = ClientBuilder.newClient();
-
         // Request the address book
-        AddressBook addressBook = requestAddressBook(CLIENT);
+        AddressBook addressBook = requestAddressBook();
         assertEquals(0, addressBook.getPersonList().size());
 
         //////////////////////////////////////////////////////////////////////
@@ -48,18 +48,11 @@ public class AddressBookServiceTest {
         // test that it is safe and idempotent
         //////////////////////////////////////////////////////////////////////
 
-        AddressBook newAddressBook = requestAddressBook(CLIENT);
+        AddressBook newAddressBook = requestAddressBook();
         // Safety check: the method must not modify a resource
         assertEquals(initialAddressBookSize, ab.getPersonList().size());
         // Idempotency check: subsequent requests must get the same results
         assertEquals(addressBook.getPersonList().size(), newAddressBook.getPersonList().size());
-    }
-
-    private AddressBook requestAddressBook(Client client) {
-        Response response = client.target("http://localhost:8282/contacts").request().get();
-        AddressBook addressBook = response.readEntity(AddressBook.class);
-        assertEquals(200, response.getStatus());
-        return addressBook;
     }
 
     @Test
@@ -74,16 +67,14 @@ public class AddressBookServiceTest {
         int juanId = 1;
         URI juanURI = URI.create("http://localhost:8282/contacts/person/" + juanId);
 
-        final Client CLIENT = ClientBuilder.newClient();
-
         // Create a new user
-        Person juanUpdated = createPerson(CLIENT, juan);
+        Person juanUpdated = createPerson(juan);
         assertEquals(juan.getName(), juanUpdated.getName());
         assertEquals(juanId, juanUpdated.getId());
         assertEquals(juanURI, juanUpdated.getHref());
 
         // Check that the new user exists
-        juanUpdated = requestPerson(CLIENT, juanId);
+        juanUpdated = requestPerson(juanId);
         assertEquals(juan.getName(), juanUpdated.getName());
         assertEquals(juanId, juanUpdated.getId());
         assertEquals(juanURI, juanUpdated.getHref());
@@ -96,32 +87,12 @@ public class AddressBookServiceTest {
         int initialAddressBookSize = ab.getPersonList().size();
         Person maria = new Person();
         maria.setName("Maria");
-        Person mariaUpated = createPerson(CLIENT, maria);
+        Person mariaUpated = createPerson(maria);
         // Unsafety check: the method must modify the system's resources
         assertNotEquals(initialAddressBookSize, ab.getPersonList().size());
         // Non-idempotency check: subsequent requests must return different results
-        Person mariaNewUpdated = createPerson(CLIENT, maria);
+        Person mariaNewUpdated = createPerson(maria);
         assertNotEquals(mariaUpated.getId(), mariaNewUpdated.getId());
-    }
-
-    private Person createPerson(Client client, Person person) {
-        Response response = client.target("http://localhost:8282/contacts")
-                .request(MediaType.APPLICATION_JSON)
-                .post(Entity.entity(person, MediaType.APPLICATION_JSON));
-        assertEquals(201, response.getStatus());
-        //assertEquals(personURI, response.getLocation());
-        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
-        Person personUpdated = response.readEntity(Person.class);
-        return personUpdated;
-    }
-
-    private Person requestPerson(Client client, int personId) {
-        Response response = client.target("http://localhost:8282/contacts/person/" + personId)
-                .request(MediaType.APPLICATION_JSON).get();
-        assertEquals(200, response.getStatus());
-        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
-        Person person = response.readEntity(Person.class);
-        return person;
     }
 
 	@Test
@@ -134,8 +105,6 @@ public class AddressBookServiceTest {
 		ab.getPersonList().add(salvador);
 		launchServer(ab);
 
-		final Client CLIENT = ClientBuilder.newClient();
-
 		// Prepare data
 		Person juan = new Person();
 		juan.setName("Juan");
@@ -147,16 +116,16 @@ public class AddressBookServiceTest {
 		URI mariaURI = URI.create("http://localhost:8282/contacts/person/" + mariaId);
 
 		// Create a user
-		createPerson(CLIENT, juan);
+		createPerson(juan);
 
 		// Create a second user
-		Person mariaUpdated = createPerson(CLIENT, maria);
+		Person mariaUpdated = createPerson(maria);
 		assertEquals(maria.getName(), mariaUpdated.getName());
 		assertEquals(mariaId, mariaUpdated.getId());
 		assertEquals(mariaURI, mariaUpdated.getHref());
 
 		// Check that the new user exists
-		mariaUpdated = requestPerson(CLIENT, mariaId);
+		mariaUpdated = requestPerson(mariaId);
 		assertEquals(maria.getName(), mariaUpdated.getName());
 		assertEquals(mariaId, mariaUpdated.getId());
 		assertEquals(mariaURI, mariaUpdated.getHref());
@@ -167,7 +136,7 @@ public class AddressBookServiceTest {
 		//////////////////////////////////////////////////////////////////////
 
 		Person initialMaria = ab.getPersonList().get(mariaId - 1);
-		Person newMaria = requestPerson(CLIENT, mariaId);
+		Person newMaria = requestPerson(mariaId);
 		// Safety check: the method must not modify a resource
 		assertEquals(initialMaria.getId(), newMaria.getId());
 		// Idempotency check: subsequent requests must get the same results
@@ -188,10 +157,8 @@ public class AddressBookServiceTest {
 		int initialAddressBookSize = ab.getPersonList().size();
 		launchServer(ab);
 
-		final Client CLIENT = ClientBuilder.newClient();
-
 		// Test list of contacts
-		AddressBook addressBookRetrieved = requestAddressBook(CLIENT);
+		AddressBook addressBookRetrieved = requestAddressBook();
 		assertEquals(initialAddressBookSize, addressBookRetrieved.getPersonList().size());
 		assertEquals(juan.getName(), addressBookRetrieved.getPersonList().get(1).getName());
 
@@ -200,7 +167,7 @@ public class AddressBookServiceTest {
 		// test that it is safe and idempotent
 		//////////////////////////////////////////////////////////////////////
 
-		AddressBook newAddressBook = requestAddressBook(CLIENT);
+		AddressBook newAddressBook = requestAddressBook();
 		// Safety check: the method must not modify a resource
 		assertEquals(initialAddressBookSize, ab.getPersonList().size());
 		assertEquals(juan.getName(), ab.getPersonList().get(1).getName());
@@ -351,5 +318,32 @@ public class AddressBookServiceTest {
 		}
 		server = null;
 	}
+
+    private AddressBook requestAddressBook() {
+        Response response = CLIENT.target("http://localhost:8282/contacts").request().get();
+        AddressBook addressBook = response.readEntity(AddressBook.class);
+        assertEquals(200, response.getStatus());
+        return addressBook;
+    }
+
+    private Person createPerson(Person person) {
+        Response response = CLIENT.target("http://localhost:8282/contacts")
+                .request(MediaType.APPLICATION_JSON)
+                .post(Entity.entity(person, MediaType.APPLICATION_JSON));
+        assertEquals(201, response.getStatus());
+        //assertEquals(personURI, response.getLocation());
+        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+        Person personUpdated = response.readEntity(Person.class);
+        return personUpdated;
+    }
+
+    private Person requestPerson(int personId) {
+        Response response = CLIENT.target("http://localhost:8282/contacts/person/" + personId)
+                .request(MediaType.APPLICATION_JSON).get();
+        assertEquals(200, response.getStatus());
+        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+        Person person = response.readEntity(Person.class);
+        return person;
+    }
 
 }
