@@ -20,6 +20,7 @@ import rest.addressbook.domain.AddressBook;
 import rest.addressbook.domain.Person;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 /**
  * A simple test suite
@@ -61,47 +62,67 @@ public class AddressBookServiceTest {
         return addressBook;
     }
 
-	@Test
-	public void createUser() throws IOException {
-		// Prepare server
-		AddressBook ab = new AddressBook();
-		launchServer(ab);
+    @Test
+    public void createUser() throws IOException {
+        // Prepare server
+        AddressBook ab = new AddressBook();
+        launchServer(ab);
 
-		// Prepare data
-		Person juan = new Person();
-		juan.setName("Juan");
-		URI juanURI = URI.create("http://localhost:8282/contacts/person/1");
+        // Prepare data
+        Person juan = new Person();
+        juan.setName("Juan");
+        int juanId = 1;
+        URI juanURI = URI.create("http://localhost:8282/contacts/person/" + juanId);
 
-		// Create a new user
-		Client client = ClientBuilder.newClient();
-		Response response = client.target("http://localhost:8282/contacts")
-				.request(MediaType.APPLICATION_JSON)
-				.post(Entity.entity(juan, MediaType.APPLICATION_JSON));
+        final Client CLIENT = ClientBuilder.newClient();
 
-		assertEquals(201, response.getStatus());
-		assertEquals(juanURI, response.getLocation());
-		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
-		Person juanUpdated = response.readEntity(Person.class);
-		assertEquals(juan.getName(), juanUpdated.getName());
-		assertEquals(1, juanUpdated.getId());
-		assertEquals(juanURI, juanUpdated.getHref());
+        // Create a new user
+        Person juanUpdated = createPerson(CLIENT, juan);
+        assertEquals(juan.getName(), juanUpdated.getName());
+        assertEquals(juanId, juanUpdated.getId());
+        assertEquals(juanURI, juanUpdated.getHref());
 
-		// Check that the new user exists
-		response = client.target("http://localhost:8282/contacts/person/1")
-				.request(MediaType.APPLICATION_JSON).get();
-		assertEquals(200, response.getStatus());
-		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
-		juanUpdated = response.readEntity(Person.class);
-		assertEquals(juan.getName(), juanUpdated.getName());
-		assertEquals(1, juanUpdated.getId());
-		assertEquals(juanURI, juanUpdated.getHref());
+        // Check that the new user exists
+        juanUpdated = getPerson(CLIENT, juanId);
+        assertEquals(juan.getName(), juanUpdated.getName());
+        assertEquals(juanId, juanUpdated.getId());
+        assertEquals(juanURI, juanUpdated.getHref());
 
-		//////////////////////////////////////////////////////////////////////
-		// Verify that POST /contacts is well implemented by the service, i.e
-		// test that it is not safe and not idempotent
-		//////////////////////////////////////////////////////////////////////	
-				
-	}
+        //////////////////////////////////////////////////////////////////////
+        // Verify that POST /contacts is well implemented by the service, i.e
+        // test that it is not safe and not idempotent
+        //////////////////////////////////////////////////////////////////////
+
+        int initialAddressBookSize = ab.getPersonList().size();
+        Person maria = new Person();
+        maria.setName("Maria");
+        Person mariaUpated = createPerson(CLIENT, maria);
+        // Unsafety check: the method must modify the system's resources
+        assertNotEquals(initialAddressBookSize, ab.getPersonList().size());
+        // Non-idempotency check: subsequent requests must return different results
+        Person mariaNewUpdated = createPerson(CLIENT, maria);
+        assertNotEquals(mariaUpated.getId(), mariaNewUpdated.getId());
+    }
+
+    private Person createPerson(Client client, Person person) {
+        Response response = client.target("http://localhost:8282/contacts")
+                .request(MediaType.APPLICATION_JSON)
+                .post(Entity.entity(person, MediaType.APPLICATION_JSON));
+        assertEquals(201, response.getStatus());
+        //assertEquals(personURI, response.getLocation());
+        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+        Person personUpdated = response.readEntity(Person.class);
+        return personUpdated;
+    }
+
+    private Person getPerson(Client client, int personId) {
+        Response response = client.target("http://localhost:8282/contacts/person/" + personId)
+                .request(MediaType.APPLICATION_JSON).get();
+        assertEquals(200, response.getStatus());
+        assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+        Person person = response.readEntity(Person.class);
+        return person;
+    }
 
 	@Test
 	public void createUsers() throws IOException {
