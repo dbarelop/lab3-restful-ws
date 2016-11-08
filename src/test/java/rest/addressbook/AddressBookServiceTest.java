@@ -52,7 +52,7 @@ public class AddressBookServiceTest {
         // Safety check: the method must not modify a resource
         assertEquals(initialAddressBookSize, ab.getPersonList().size());
         // Idempotency check: subsequent requests must get the same results
-        assertEquals(addressBook.getPersonList(), newAddressBook.getPersonList());
+        assertEquals(addressBook.getPersonList().size(), newAddressBook.getPersonList().size());
     }
 
     private AddressBook requestAddressBook(Client client) {
@@ -185,25 +185,28 @@ public class AddressBookServiceTest {
 		juan.setName("Juan");
 		ab.getPersonList().add(salvador);
 		ab.getPersonList().add(juan);
+		int initialAddressBookSize = ab.getPersonList().size();
 		launchServer(ab);
 
+		final Client CLIENT = ClientBuilder.newClient();
+
 		// Test list of contacts
-		Client client = ClientBuilder.newClient();
-		Response response = client.target("http://localhost:8282/contacts")
-				.request(MediaType.APPLICATION_JSON).get();
-		assertEquals(200, response.getStatus());
-		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
-		AddressBook addressBookRetrieved = response
-				.readEntity(AddressBook.class);
-		assertEquals(2, addressBookRetrieved.getPersonList().size());
-		assertEquals(juan.getName(), addressBookRetrieved.getPersonList()
-				.get(1).getName());
+		AddressBook addressBookRetrieved = requestAddressBook(CLIENT);
+		assertEquals(initialAddressBookSize, addressBookRetrieved.getPersonList().size());
+		assertEquals(juan.getName(), addressBookRetrieved.getPersonList().get(1).getName());
 
 		//////////////////////////////////////////////////////////////////////
 		// Verify that GET for collections is well implemented by the service, i.e
 		// test that it is safe and idempotent
-		//////////////////////////////////////////////////////////////////////	
-	
+		//////////////////////////////////////////////////////////////////////
+
+		AddressBook newAddressBook = requestAddressBook(CLIENT);
+		// Safety check: the method must not modify a resource
+		assertEquals(initialAddressBookSize, ab.getPersonList().size());
+		assertEquals(juan.getName(), ab.getPersonList().get(1).getName());
+		// Idempotency check: subsequent requests must get the same results
+		assertEquals(addressBookRetrieved.getPersonList().size(), newAddressBook.getPersonList().size());
+		assertEquals(addressBookRetrieved.getPersonList().get(1).getName(), newAddressBook.getPersonList().get(1).getName());
 	}
 
 	@Test
