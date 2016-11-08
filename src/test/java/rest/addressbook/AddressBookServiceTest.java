@@ -29,25 +29,37 @@ public class AddressBookServiceTest {
 
 	private HttpServer server;
 
-	@Test
-	public void serviceIsAlive() throws IOException {
-		// Prepare server
-		AddressBook ab = new AddressBook();
-		launchServer(ab);
+    @Test
+    public void serviceIsAlive() throws IOException {
+        // Prepare server
+        AddressBook ab = new AddressBook();
+        int initialAddressBookSize = ab.getPersonList().size();
+        launchServer(ab);
 
-		// Request the address book
-		Client client = ClientBuilder.newClient();
-		Response response = client.target("http://localhost:8282/contacts")
-				.request().get();
-		assertEquals(200, response.getStatus());
-		assertEquals(0, response.readEntity(AddressBook.class).getPersonList()
-				.size());
+        final Client CLIENT = ClientBuilder.newClient();
 
-		//////////////////////////////////////////////////////////////////////
-		// Verify that GET /contacts is well implemented by the service, i.e
-		// test that it is safe and idempotent
-		//////////////////////////////////////////////////////////////////////	
-	}
+        // Request the address book
+        AddressBook addressBook = requestAddressBook(CLIENT);
+        assertEquals(0, addressBook.getPersonList().size());
+
+        //////////////////////////////////////////////////////////////////////
+        // Verify that GET /contacts is well implemented by the service, i.e
+        // test that it is safe and idempotent
+        //////////////////////////////////////////////////////////////////////
+
+        AddressBook newAddressBook = requestAddressBook(CLIENT);
+        // Safety check: the method must not modify a resource
+        assertEquals(initialAddressBookSize, ab.getPersonList().size());
+        // Idempotency check: subsequent requests must get the same results
+        assertEquals(addressBook.getPersonList(), newAddressBook.getPersonList());
+    }
+
+    private AddressBook requestAddressBook(Client client) {
+        Response response = client.target("http://localhost:8282/contacts").request().get();
+        AddressBook addressBook = response.readEntity(AddressBook.class);
+        assertEquals(200, response.getStatus());
+        return addressBook;
+    }
 
 	@Test
 	public void createUser() throws IOException {
