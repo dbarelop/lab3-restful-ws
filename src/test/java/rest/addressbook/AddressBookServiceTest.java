@@ -21,6 +21,7 @@ import rest.addressbook.domain.Person;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * A simple test suite
@@ -229,31 +230,31 @@ public class AddressBookServiceTest {
 		AddressBook ab = new AddressBook();
 		Person salvador = new Person();
 		salvador.setName("Salvador");
-		salvador.setId(1);
+		int salvadorId = 1;
+		salvador.setId(salvadorId);
 		Person juan = new Person();
 		juan.setName("Juan");
-		juan.setId(2);
+		int juanId = 2;
+		juan.setId(juanId);
 		ab.getPersonList().add(salvador);
 		ab.getPersonList().add(juan);
 		launchServer(ab);
 
 		// Delete a user
-		Client client = ClientBuilder.newClient();
-		Response response = client
-				.target("http://localhost:8282/contacts/person/2").request()
-				.delete();
-		assertEquals(204, response.getStatus());
+		deletePerson(juanId);
 
 		// Verify that the user has been deleted
-		response = client.target("http://localhost:8282/contacts/person/2")
+		Response response = CLIENT.target("http://localhost:8282/contacts/person/" + juanId)
 				.request().delete();
 		assertEquals(404, response.getStatus());
 
 		//////////////////////////////////////////////////////////////////////
 		// Verify that DELETE /contacts/person/2 is well implemented by the service, i.e
 		// test that it is idempotent
-		//////////////////////////////////////////////////////////////////////	
+		//////////////////////////////////////////////////////////////////////
 
+		// Idempotency check: subsequent requests must return the same results
+		deletePerson(juanId);
 	}
 
 	@Test
@@ -349,6 +350,13 @@ public class AddressBookServiceTest {
 		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
 		Person updatedPerson = response.readEntity(Person.class);
 		return updatedPerson;
+	}
+
+	private boolean deletePerson(int personId) {
+		Response response = CLIENT.target("http://localhost:8282/contacts/person/" + personId).request()
+				.delete();
+		assertTrue(response.getStatus() == 204 || response.getStatus() == 404);
+		return response.getStatus() == 204;
 	}
 
 }
